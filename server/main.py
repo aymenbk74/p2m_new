@@ -60,7 +60,7 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
             Réponds UNIQUEMENT le JSON.
             """
             analysis_response = client.models.generate_content(
-                model="gemini-pro",
+                model="gemini-2.5-flash",
                 contents=analysis_prompt
             )
             filters = parse_gemini_filters(analysis_response.text)
@@ -119,7 +119,7 @@ async def chat_endpoint(request: ChatRequest, db: Session = Depends(get_db)):
                 formatted_history.append({"role": role, "parts": [{"text": content}]})
 
             chat_session = client.chats.create(
-                model="gemini-pro",
+                model="gemini-2.5-flash",
                 config={
                     "system_instruction": f"Tu es un assistant shopping. J'ai trouvé {len(products_data)} produits. Présente-les."
                 },
