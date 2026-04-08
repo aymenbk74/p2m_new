@@ -56,6 +56,38 @@ pipeline {
             }
         }
 
+        stage('Playwright Tests') {
+            steps {
+                script {
+                    sh '''
+                        cd frontend
+                        # Start dev server in background
+                        npm run dev > /tmp/dev-server.log 2>&1 &
+                        DEV_PID=$!
+                        echo "Dev server started with PID: $DEV_PID"
+                        
+                        # Wait for server to be ready (max 30 seconds)
+                        for i in {1..30}; do
+                            if curl -s http://localhost:3000 > /dev/null; then
+                                echo "Dev server is ready"
+                                break
+                            fi
+                            echo "Waiting for dev server... ($i/30)"
+                            sleep 1
+                        done
+                        
+                        # Run Playwright tests
+                        npx playwright install --with-deps
+                        npm run test
+                        
+                        # Kill dev server
+                        kill $DEV_PID || true
+                        wait $DEV_PID 2>/dev/null || true
+                    '''
+                }
+            }
+        }
+
         stage('Build Docker Images') {
             steps {
                 script {
@@ -177,6 +209,20 @@ pipeline {
 
             // Archive build artifacts
             archiveArtifacts artifacts: 'frontend/dist/**/*', allowEmptyArchive: true
+            
+            // Archive Playwright test results and reports
+            archiveArtifacts artifacts: 'frontend/playwright-report/**/*', allowEmptyArchive: true
+            archiveArtifacts artifacts: 'frontend/test-results/**/*', allowEmptyArchive: true
+            
+            // Publish Playwright HTML report
+            publishHTML([
+                reportDir: 'frontend/playwright-report',
+                reportFiles: 'index.html',
+                reportName: 'Playwright Test Report',
+                allowMissing: true,
+                alwaysLinkToLastBuild: true,
+                keepAll: true
+            ])
         }
 
         success {

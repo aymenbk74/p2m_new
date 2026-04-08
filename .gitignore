@@ -28,3 +28,8 @@ yarn-error.log*
 .vscode/
 .idea/
 Thumbs.db
+
+# --- Testing & Playwright ---
+playwright-report/
+test-results/
+.playwright/
