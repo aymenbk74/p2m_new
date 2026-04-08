@@ -37,12 +37,13 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim sh -c 'python -m pip install --upgrade pip && pip install -r requirements.txt pytest requests'
+                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim python -m pip install --upgrade pip
+                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim pip install -r requirements.txt pytest requests
                     '''
 
                     // Run backend tests (if they exist as proper unit tests)
                     sh '''
-                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim sh -c 'if [ -f "pytest.ini" ] || [ -f "setup.py" ] || find . -name "*test*.py" -type f | grep -v "test_" | head -1; then python -m pytest --tb=short -v || echo "No pytest tests found, skipping"; fi'
+                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim python -m pytest --tb=short -v || echo "No pytest tests found, skipping"
                     '''
                 }
             }
