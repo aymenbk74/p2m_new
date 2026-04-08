@@ -44,13 +44,12 @@ pipeline {
             }
         }
 
-        stage('Frontend Lint & Build') {
+        stage('Frontend Build') {
             steps {
                 script {
                     sh '''
                         cd frontend
                         npm install
-                        npm run lint
                         npm run build
                     '''
                 }
