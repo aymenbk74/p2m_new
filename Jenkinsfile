@@ -61,28 +61,45 @@ pipeline {
                 script {
                     sh '''
                         cd frontend
-                        # Start dev server in background
+                        
+                        # Install Playwright browsers first
+                        npx playwright install --with-deps
+                        
+                        # Start dev server in background and wait longer
                         npm run dev > /tmp/dev-server.log 2>&1 &
                         DEV_PID=$!
                         echo "Dev server started with PID: $DEV_PID"
+                        sleep 10  # Give server time to start
                         
-                        # Wait for server to be ready (max 30 seconds)
-                        for i in {1..30}; do
-                            if curl -s http://localhost:3000 > /dev/null; then
-                                echo "Dev server is ready"
+                        # Wait for server to be ready (max 60 seconds with longer checks)
+                        for i in {1..60}; do
+                            if curl -s http://localhost:3000 > /dev/null 2>&1; then
+                                echo "Dev server is ready on attempt $i"
                                 break
                             fi
-                            echo "Waiting for dev server... ($i/30)"
+                            echo "Waiting for dev server... ($i/60) - checking logs..."
+                            tail -n 5 /tmp/dev-server.log 2>/dev/null || true
                             sleep 1
                         done
                         
+                        sleep 3  # Extra buffer before tests
+                        
                         # Run Playwright tests
-                        npx playwright install --with-deps
-                        npm run test
+                        npm run test || TEST_FAILED=1
+                        
+                        # Capture dev server logs if tests failed
+                        if [ "$TEST_FAILED" = "1" ]; then
+                            echo "\n=== Dev Server Logs ==="
+                            cat /tmp/dev-server.log
+                        fi
                         
                         # Kill dev server
-                        kill $DEV_PID || true
+                        kill $DEV_PID 2>/dev/null || true
                         wait $DEV_PID 2>/dev/null || true
+                        
+                        # Exit with error if tests failed
+                        [ "$TEST_FAILED" = "1" ] && exit 1
+                        exit 0
                     '''
                 }
             }
