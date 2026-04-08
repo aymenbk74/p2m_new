@@ -65,41 +65,68 @@ pipeline {
                         # Install Playwright browsers first
                         npx playwright install --with-deps
                         
-                        # Start dev server in background and wait longer
+                        # Check npm is available
+                        npm --version
+                        node --version
+                        
+                        # Clean any existing processes on port 3000
+                        lsof -ti:3000 | xargs kill -9 || true
+                        sleep 2
+                        
+                        # Start dev server in background
+                        echo "Starting dev server..."
                         npm run dev > /tmp/dev-server.log 2>&1 &
                         DEV_PID=$!
-                        echo "Dev server started with PID: $DEV_PID"
-                        sleep 10  # Give server time to start
+                        echo "Dev server PID: $DEV_PID"
                         
-                        # Wait for server to be ready (max 60 seconds with longer checks)
-                        for i in {1..60}; do
-                            if curl -s http://localhost:3000 > /dev/null 2>&1; then
-                                echo "Dev server is ready on attempt $i"
+                        # Wait for port to be listening (more robust check)
+                        echo "Waiting for port 3000 to be listening..."
+                        MAX_ATTEMPTS=80
+                        for i in $(seq 1 $MAX_ATTEMPTS); do
+                            if netstat -tulpn 2>/dev/null | grep -q :3000; then
+                                echo "✓ Port 3000 is listening (attempt $i)"
+                                break
+                            elif lsof -i:3000 2>/dev/null | grep -q LISTEN; then
+                                echo "✓ Port 3000 is listening (lsof check - attempt $i)"
+                                break
+                            elif nc -z localhost 3000 2>/dev/null; then
+                                echo "✓ Port 3000 responds (nc check - attempt $i)"
                                 break
                             fi
-                            echo "Waiting for dev server... ($i/60) - checking logs..."
-                            tail -n 5 /tmp/dev-server.log 2>/dev/null || true
+                            
+                            if [ $((i % 10)) -eq 0 ]; then
+                                echo "Still waiting... ($i/$MAX_ATTEMPTS seconds)"
+                                echo "Recent server logs:"
+                                tail -n 10 /tmp/dev-server.log 2>/dev/null || echo "(no logs yet)"
+                            fi
                             sleep 1
                         done
                         
-                        sleep 3  # Extra buffer before tests
+                        sleep 3  # Extra buffer
                         
-                        # Run Playwright tests
-                        npm run test || TEST_FAILED=1
-                        
-                        # Capture dev server logs if tests failed
-                        if [ "$TEST_FAILED" = "1" ]; then
-                            echo "\n=== Dev Server Logs ==="
-                            cat /tmp/dev-server.log
+                        # Verify server is actually responding
+                        echo "Verifying server responds..."
+                        if curl -s -f http://localhost:3000 > /dev/null; then
+                            echo "✓ Server responding to HTTP requests"
+                        else
+                            echo "✗ Server not responding, checking logs..."
+                            echo "=== DEV SERVER LOGS ==="
+                            tail -n 50 /tmp/dev-server.log
+                            echo "=== END LOGS ==="
+                            kill $DEV_PID 2>/dev/null || true
+                            exit 1
                         fi
                         
+                        # Run Playwright tests
+                        echo "Running Playwright tests..."
+                        npm run test || TEST_FAILED=$?
+                        
                         # Kill dev server
+                        echo "Cleaning up dev server..."
                         kill $DEV_PID 2>/dev/null || true
                         wait $DEV_PID 2>/dev/null || true
                         
-                        # Exit with error if tests failed
-                        [ "$TEST_FAILED" = "1" ] && exit 1
-                        exit 0
+                        exit ${TEST_FAILED:-0}
                     '''
                 }
             }
