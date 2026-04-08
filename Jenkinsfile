@@ -37,13 +37,8 @@ pipeline {
             steps {
                 script {
                     sh '''
-                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim python -m pip install --upgrade pip
-                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim pip install -r requirements.txt pytest requests
-                    '''
-
-                    // Run backend tests (if they exist as proper unit tests)
-                    sh '''
-                        docker run --rm -v "$PWD/server":/app -w /app python:3.11-slim python -m pytest --tb=short -v || echo "No pytest tests found, skipping"
+                        docker build --no-cache -f Dockerfile.backend -t p2m-backend-ci .
+                        docker run --rm p2m-backend-ci sh -c 'pip install pytest && python -m pytest --tb=short -v || echo "No pytest tests found, skipping"'
                     '''
                 }
             }
